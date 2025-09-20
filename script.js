@@ -506,19 +506,47 @@ class ProCubeGame {
         this.isShuffling = true;
         this.updateGameStatus('🔀 Перемешивание кубика...');
         
-        const moves = ['R', 'L', 'U', 'D', 'F', 'B'];
-        const numMoves = 25;
+        // Расширенный набор ходов для большего хаоса
+        const moves = ['R', 'R\'', 'L', 'L\'', 'U', 'U\'', 'D', 'D\'', 'F', 'F\'', 'B', 'B\''];
+        const numMoves = 50; // Увеличиваем количество ходов для настоящего хаоса
         let moveCount = 0;
+        let previousMove = '';
         
         const performMove = () => {
             if (moveCount < numMoves) {
-                const randomMove = moves[Math.floor(Math.random() * moves.length)];
-                this.performRotation(randomMove);
+                let randomMove;
+                // Избегаем повторения одного и того же хода подряд
+                do {
+                    randomMove = moves[Math.floor(Math.random() * moves.length)];
+                } while (randomMove === previousMove);
+                
+                previousMove = randomMove;
+                
+                // Преобразуем обратные ходы (с апострофом) в обычные для выполнения
+                const move = randomMove.includes('\'') ? randomMove.charAt(0) : randomMove;
+                const isReverse = randomMove.includes('\'');
+                
+                // Выполняем ход (для обратных ходов делаем 3 поворота вместо 1)
+                if (isReverse) {
+                    this.performRotation(move);
+                    setTimeout(() => {
+                        this.performRotation(move);
+                        setTimeout(() => {
+                            this.performRotation(move);
                 moveCount++;
-                setTimeout(performMove, 200); // Ускоряем перемешивание
+                            setTimeout(performMove, 150);
+                        }, 150);
+                    }, 150);
+                } else {
+                    this.performRotation(move);
+                    moveCount++;
+                    setTimeout(performMove, 150);
+                }
             } else {
                 this.isShuffling = false;
                 this.resetMoveCount();
+                this.resetTimer();
+                this.isSolved = false;
                 this.updateGameStatus('🎯 Кубик перемешан! Начните сборку!');
                 this.updateProgress();
             }
@@ -542,12 +570,217 @@ class ProCubeGame {
     solveCube() {
         if (this.isRotating || this.isShuffling) return;
         
-        this.reset();
-        this.updateGameStatus('🤖 Кубик автоматически решен!');
+        // Проверяем, собран ли кубик
+        if (this.checkIfSolved()) {
+            this.updateGameStatus('✅ Кубик уже собран! Перемешайте его для новой игры.');
+            return;
+        }
+        
+        // Открываем модальное окно сборки
+        this.openSolveModal();
+    }
+    
+    // ================== СИСТЕМА МОДАЛЬНОГО ОКНА СБОРКИ ==================
+    openSolveModal() {
+        const modal = document.getElementById('solveModal');
+        modal.style.display = 'flex';
+        
+        // Инициализируем сессию сборки
+        this.initSolveSession();
+        this.updateGameStatus('🧩 Режим сборки активирован!');
+    }
+    
+    closeSolveModal() {
+        const modal = document.getElementById('solveModal');
+        modal.style.display = 'none';
+        
+        // Останавливаем таймер сборки
+        this.stopSolveTimer();
+        this.updateGameStatus('🎯 Режим сборки завершен.');
+    }
+    
+    initSolveSession() {
+        // Сбрасываем данные сессии
+        this.solveStartTime = Date.now();
+        this.solveMoves = 0;
+        this.solvePaused = false;
+        this.solvePausedTime = 0;
+        
+        // Обновляем UI
+        this.updateSolveUI();
+        
+        // Запускаем таймер
+        this.startSolveTimer();
+        
+        // Создаем копию кубика для модального окна (если нужно)
+        this.setupSolveCube();
+        
+        // Обновляем статус
+        this.updateSolveStatus('🎯 Начните сборку кубика! Кликайте на кубик или используйте кнопки ниже.');
+    }
+    
+    setupSolveCube() {
+        const canvas = document.getElementById('solveCubeCanvas');
+        if (!canvas) return;
+        
+        // Для упрощения будем использовать основной кубик
+        // В реальной реализации можно создать отдельную сцену
+        canvas.style.display = 'block';
+    }
+    
+    // ================== СИСТЕМА ТАЙМЕРА СБОРКИ ==================
+    startSolveTimer() {
+        this.solveTimerInterval = setInterval(() => {
+            if (!this.solvePaused) {
+                const elapsed = this.getSolveElapsedTime();
+                document.getElementById('solveTimer').textContent = elapsed;
+            }
+        }, 100); // Обновляем каждые 100мс для точности
+    }
+    
+    stopSolveTimer() {
+        if (this.solveTimerInterval) {
+            clearInterval(this.solveTimerInterval);
+            this.solveTimerInterval = null;
+        }
+    }
+    
+    pauseSolveTimer() {
+        this.solvePaused = !this.solvePaused;
+        const btn = document.getElementById('pauseSolveBtn');
+        
+        if (this.solvePaused) {
+            this.solvePausedStart = Date.now();
+            btn.innerHTML = '<span class="btn-icon">▶️</span><span class="btn-text">Продолжить</span>';
+            this.updateSolveStatus('⏸️ Сборка приостановлена. Нажмите "Продолжить" для возобновления.');
+        } else {
+            if (this.solvePausedStart) {
+                this.solvePausedTime += Date.now() - this.solvePausedStart;
+            }
+            btn.innerHTML = '<span class="btn-icon">⏸️</span><span class="btn-text">Пауза</span>';
+            this.updateSolveStatus('🎯 Сборка возобновлена! Продолжайте решение кубика.');
+        }
+    }
+    
+    getSolveElapsedTime() {
+        if (!this.solveStartTime) return '00:00.0';
+        
+        let elapsed = Date.now() - this.solveStartTime - this.solvePausedTime;
+        if (this.solvePaused && this.solvePausedStart) {
+            elapsed -= (Date.now() - this.solvePausedStart);
+        }
+        
+        const totalSeconds = elapsed / 1000;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        const deciseconds = Math.floor((totalSeconds % 1) * 10);
+        
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${deciseconds}`;
+    }
+    
+    // ================== УПРАВЛЕНИЕ СБОРКОЙ ==================
+    handleSolveMove(move) {
+        if (this.solvePaused || this.isRotating) return;
+        
+        // Выполняем ход
+        this.performSolveRotation(move);
+        this.solveMoves++;
+        
+        // Обновляем UI
+        this.updateSolveUI();
+        
+        // Проверяем решение
+        setTimeout(() => {
+            if (this.checkIfSolved()) {
+                this.onSolveCompleted();
+            }
+        }, 300);
+    }
+    
+    performSolveRotation(move) {
+        // Определяем направление поворота
+        const isReverse = move.includes("'");
+        const baseMove = isReverse ? move.charAt(0) : move;
+        
+        if (isReverse) {
+            // Для обратного хода делаем 3 поворота
+            this.performRotation(baseMove);
+            setTimeout(() => {
+                this.performRotation(baseMove);
+                setTimeout(() => {
+                    this.performRotation(baseMove);
+                }, 150);
+            }, 150);
+        } else {
+            this.performRotation(baseMove);
+        }
+    }
+    
+    updateSolveUI() {
+        document.getElementById('solveMoves').textContent = this.solveMoves;
+        
+        // Обновляем прогресс
+        const progress = this.calculateSolveProgress();
+        document.getElementById('solveProgress').textContent = `${Math.round(progress)}%`;
+        
+        // Включаем подсказку если куплена
+        if (this.ownedItems.includes('hint')) {
+            document.getElementById('hintSolveBtn').disabled = false;
+        }
+    }
+    
+    updateSolveStatus(message) {
+        const statusElement = document.getElementById('solveStatusMessage');
+        if (statusElement) {
+            statusElement.textContent = message;
+        }
+    }
+    
+    onSolveCompleted() {
+        this.stopSolveTimer();
+        
+        const solveTime = this.getSolveElapsedTime();
+        const timeInSeconds = this.timeToSeconds(solveTime);
+        
+        // Вычисляем награды (максимум 100 монет за раунд)
+        const baseReward = 30; // Базовая награда
+        const timeBonus = Math.max(0, 50 - Math.floor(timeInSeconds / 6)); // Бонус за время
+        const moveBonus = Math.max(0, 20 - Math.floor(this.solveMoves / 10)); // Бонус за эффективность
+        const levelBonus = Math.floor(this.currentLevel * 1.5); // Бонус за уровень
+        
+        let totalReward = baseReward + timeBonus + moveBonus + levelBonus;
+        
+        // Ограничиваем максимальную награду 100 монетами за раунд
+        totalReward = Math.min(totalReward, 100);
+        
+        // Добавляем монеты
+        this.coins += totalReward;
+        
+        // Повышаем уровень
+        this.currentLevel++;
+        
+        // Обновляем рекорды
+        if (this.moveCount < this.bestMoves) {
+            this.bestMoves = this.solveMoves;
+            localStorage.setItem('procube_best_moves', this.bestMoves);
+        }
+        
+        if (this.bestTime === '--:--' || timeInSeconds < this.timeToSeconds(this.bestTime)) {
+            this.bestTime = solveTime;
+            localStorage.setItem('procube_best_time', this.bestTime);
+        }
+        
+        // Сохраняем прогресс
+        this.saveProgress();
+        this.updateUI();
+        
+        // Показываем результат
+        this.updateSolveStatus(`🏆 ПОЗДРАВЛЯЕМ! Кубик собран за ${solveTime} и ${this.solveMoves} ходов! +${totalReward} монет!`);
         
         setTimeout(() => {
-            alert('Кубик решен! Попробуйте перемешать и собрать самостоятельно для получения монет и опыта.');
-        }, 500);
+            alert(`🎉 Отличная работа!\n⏱️ Время: ${solveTime}\n🔄 Ходы: ${this.solveMoves}\n🪙 Награда: ${totalReward} монет\n🔥 Новый уровень: ${this.currentLevel}\n\n💡 Бонус за время: ${timeBonus}\n🎯 Бонус за эффективность: ${moveBonus}\n🌟 Бонус за уровень: ${levelBonus}`);
+            this.closeSolveModal();
+        }, 2000);
     }
     
     checkIfSolved() {
@@ -583,10 +816,16 @@ class ProCubeGame {
     onCubeSolved() {
         this.stopTimer();
         
-        // Вычисляем награды
+        // Вычисляем награды с учетом уровня
         const timeBonus = this.getTimeBonus();
         const moveBonus = this.getMoveBonus();
-        const coinsEarned = timeBonus + moveBonus + 50; // Базовая награда 50 монет
+        const levelMultiplier = 1 + (this.currentLevel * 0.2); // Бонус за уровень: +20% за каждый уровень
+        const levelBonus = Math.floor(this.currentLevel * 5); // Дополнительные монеты за уровень
+        
+        let coinsEarned = Math.floor((timeBonus + moveBonus + 50) * levelMultiplier) + levelBonus;
+        
+        // Ограничиваем максимум 100 монет за обычную сборку
+        coinsEarned = Math.min(coinsEarned, 100);
         
         // Обновляем рекорды
         if (this.moveCount < this.bestMoves) {
@@ -612,7 +851,7 @@ class ProCubeGame {
         this.victoryEffect();
         
         setTimeout(() => {
-            alert(`🎉 Кубик собран за ${this.moveCount} ходов!\n⏱️ Время: ${currentTime}\n🪙 Заработано монет: ${coinsEarned}\n🔥 Новый уровень: ${this.currentLevel}`);
+            alert(`🎉 Кубик собран за ${this.moveCount} ходов!\n⏱️ Время: ${currentTime}\n🪙 Заработано монет: ${coinsEarned}\n🔥 Новый уровень: ${this.currentLevel}\n\n💰 Бонус за время: ${timeBonus}\n🎯 Бонус за эффективность: ${moveBonus}\n🌟 Бонус за уровень: ${levelBonus}\n📈 Множитель уровня: x${levelMultiplier.toFixed(1)}`);
         }, 1000);
     }
     
@@ -834,6 +1073,29 @@ class ProCubeGame {
         }, 3000);
     }
     
+    showSolveHint() {
+        const moves = ['R', 'R\'', 'L', 'L\'', 'U', 'U\'', 'D', 'D\'', 'F', 'F\'', 'B', 'B\''];
+        const hint = moves[Math.floor(Math.random() * moves.length)];
+        
+        // Подсвечиваем соответствующую кнопку
+        const hintBtn = document.querySelector(`[data-move="${hint}"]`);
+        if (hintBtn) {
+            hintBtn.style.animation = 'hintGlow 2s ease-in-out';
+            hintBtn.style.background = 'linear-gradient(45deg, #ff8800, #ffaa00)';
+            
+            setTimeout(() => {
+                hintBtn.style.animation = '';
+                hintBtn.style.background = '';
+            }, 2000);
+        }
+        
+        this.updateSolveStatus(`💡 Подсказка: попробуйте ход "${hint}"`);
+        
+        setTimeout(() => {
+            this.updateSolveStatus('🎯 Продолжайте сборку кубика!');
+        }, 3000);
+    }
+    
     // ================== ОБРАБОТЧИКИ СОБЫТИЙ ==================
     setupEventListeners() {
         // Кнопки управления
@@ -850,6 +1112,28 @@ class ProCubeGame {
             btn.addEventListener('click', (e) => {
                 const itemId = e.target.closest('.shop-item').dataset.item;
                 this.buyItem(itemId);
+            });
+        });
+        
+        // Модальное окно сборки
+        document.getElementById('closeSolveModal').addEventListener('click', () => this.closeSolveModal());
+        document.getElementById('pauseSolveBtn').addEventListener('click', () => this.pauseSolveTimer());
+        document.getElementById('exitSolveBtn').addEventListener('click', () => this.closeSolveModal());
+        
+        // Кнопка подсказки в режиме сборки
+        document.getElementById('hintSolveBtn').addEventListener('click', () => {
+            if (this.ownedItems.includes('hint')) {
+                this.showSolveHint();
+            } else {
+                alert('Купите подсказку в магазине для использования этой функции!');
+            }
+        });
+        
+        // Кнопки ходов в режиме сборки
+        document.querySelectorAll('.move-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const move = e.target.getAttribute('data-move');
+                this.handleSolveMove(move);
             });
         });
         

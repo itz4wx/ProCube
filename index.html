@@ -173,6 +173,86 @@
         </div>
     </div>
 
+    <!-- Модальное окно сборки кубика -->
+    <div id="solveModal" class="modal" style="display: none;">
+        <div class="modal-content solve-modal-content">
+            <div class="modal-header">
+                <h2>🧩 Режим Сборки</h2>
+                <button class="close-btn" id="closeSolveModal">&times;</button>
+            </div>
+            <div class="modal-body solve-modal-body">
+                <!-- Информация о сессии -->
+                <div class="solve-session-info">
+                    <div class="session-stats">
+                        <div class="stat-item">
+                            <div class="stat-icon">⏱️</div>
+                            <div class="stat-label">Время</div>
+                            <div class="stat-value" id="solveTimer">00:00</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">🔄</div>
+                            <div class="stat-label">Ходы</div>
+                            <div class="stat-value" id="solveMoves">0</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">🎯</div>
+                            <div class="stat-label">Прогресс</div>
+                            <div class="stat-value" id="solveProgress">0%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="session-controls">
+                        <button id="pauseSolveBtn" class="solve-btn secondary">
+                            <span class="btn-icon">⏸️</span>
+                            <span class="btn-text">Пауза</span>
+                        </button>
+                        <button id="hintSolveBtn" class="solve-btn hint" disabled>
+                            <span class="btn-icon">💡</span>
+                            <span class="btn-text">Подсказка</span>
+                        </button>
+                        <button id="exitSolveBtn" class="solve-btn danger">
+                            <span class="btn-icon">🚪</span>
+                            <span class="btn-text">Выход</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Область для кубика -->
+                <div class="solve-cube-area">
+                    <canvas id="solveCubeCanvas"></canvas>
+                    
+                    <!-- Панель управления поворотами -->
+                    <div class="solve-controls">
+                        <div class="move-category">
+                            <h4>Основные повороты</h4>
+                            <div class="move-buttons">
+                                <button class="move-btn" data-move="R">R</button>
+                                <button class="move-btn" data-move="R'">R'</button>
+                                <button class="move-btn" data-move="L">L</button>
+                                <button class="move-btn" data-move="L'">L'</button>
+                                <button class="move-btn" data-move="U">U</button>
+                                <button class="move-btn" data-move="U'">U'</button>
+                                <button class="move-btn" data-move="D">D</button>
+                                <button class="move-btn" data-move="D'">D'</button>
+                                <button class="move-btn" data-move="F">F</button>
+                                <button class="move-btn" data-move="F'">F'</button>
+                                <button class="move-btn" data-move="B">B</button>
+                                <button class="move-btn" data-move="B'">B'</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Статус сборки -->
+                <div class="solve-status">
+                    <div class="status-message" id="solveStatusMessage">
+                        🎯 Начните сборку кубика! Кликайте на кубик или используйте кнопки ниже.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
