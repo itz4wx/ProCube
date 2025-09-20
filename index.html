@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>ProCube - 3D Кубик Рубик</title>
+    <title>ProCube - Премиум 3D Кубик Рубик</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -12,6 +15,7 @@
     <div id="loading-screen">
         <div class="loading-container">
             <h1 class="logo-3d">ProCube</h1>
+            <div class="subtitle">Премиум 3D Опыт</div>
             <div class="loading-cube">
                 <div class="cube">
                     <div class="face front"></div>
@@ -22,7 +26,7 @@
                     <div class="face bottom"></div>
                 </div>
             </div>
-            <div class="loading-text">Загрузка...</div>
+            <div class="loading-text">Загрузка 3D движка...</div>
             <div class="loading-bar">
                 <div class="loading-progress"></div>
             </div>
@@ -31,25 +35,141 @@
 
     <!-- Игровой экран -->
     <div id="game-screen" style="display: none;">
+        <!-- Верхняя панель -->
         <div class="game-header">
-            <h2>ProCube</h2>
-            <div class="timer">00:00</div>
+            <div class="header-left">
+                <h2 class="game-title">ProCube</h2>
+                <div class="level-display">
+                    <span class="level-text">Уровень</span>
+                    <span class="level-number" id="currentLevel">1</span>
+                </div>
+            </div>
+            
+            <div class="header-center">
+                <div class="timer-container">
+                    <div class="timer-icon">⏱️</div>
+                    <div class="timer" id="gameTimer">00:00</div>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="coins-display">
+                    <div class="coin-icon">🟨</div>
+                    <span class="coins-amount" id="coinsAmount">0</span>
+                </div>
+            </div>
         </div>
         
+        <!-- Основная игровая область -->
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
+            
+            <!-- Индикатор прогресса -->
+            <div class="progress-indicator">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text">Прогресс сборки</div>
+            </div>
         </div>
         
+        <!-- Панель управления -->
         <div class="game-controls">
-            <button id="shuffleBtn" class="control-btn">Перемешать</button>
-            <button id="resetBtn" class="control-btn">Сброс</button>
-            <button id="solveBtn" class="control-btn">Решить</button>
+            <button id="shuffleBtn" class="control-btn primary">
+                <span class="btn-icon">🔀</span>
+                <span class="btn-text">Перемешать</span>
+            </button>
+            <button id="resetBtn" class="control-btn secondary">
+                <span class="btn-icon">🔄</span>
+                <span class="btn-text">Сброс</span>
+            </button>
+            <button id="solveBtn" class="control-btn success">
+                <span class="btn-icon">✨</span>
+                <span class="btn-text">Решить</span>
+            </button>
+            <button id="shopBtn" class="control-btn shop">
+                <span class="btn-icon">🛒</span>
+                <span class="btn-text">CubeShop</span>
+            </button>
         </div>
         
+        <!-- Информационная панель -->
         <div class="game-info">
-            <div class="moves-counter">Ходы: <span id="moves">0</span></div>
-            <div class="help-text">Кликните по грани кубика для её поворота</div>
-            <div class="game-status" id="gameStatus">Кубик перемешан - начните сборку!</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Ходы</div>
+                    <div class="info-value" id="moves">0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Рекорд</div>
+                    <div class="info-value" id="bestMoves">∞</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Лучшее время</div>
+                    <div class="info-value" id="bestTime">--:--</div>
+                </div>
+            </div>
+            <div class="game-status" id="gameStatus">Добро пожаловать в ProCube!</div>
+        </div>
+    </div>
+
+    <!-- Модальное окно магазина -->
+    <div id="shopModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🛒 CubeShop</h2>
+                <button class="close-btn" id="closeShop">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="shop-balance">
+                    <div class="balance-label">Ваш баланс:</div>
+                    <div class="balance-amount">
+                        <span class="coin-icon">🟨</span>
+                        <span id="shopCoinsAmount">0</span>
+                    </div>
+                </div>
+                
+                <div class="shop-items">
+                    <div class="shop-item" data-item="theme1">
+                        <div class="item-preview">🎨</div>
+                        <div class="item-info">
+                            <h3>Радужная тема</h3>
+                            <p>Красочные цвета для кубика</p>
+                            <div class="item-price">
+                                <span class="coin-icon">🟨</span>
+                                <span>100</span>
+                            </div>
+                        </div>
+                        <button class="buy-btn">Купить</button>
+                    </div>
+                    
+                    <div class="shop-item" data-item="hint">
+                        <div class="item-preview">💡</div>
+                        <div class="item-info">
+                            <h3>Подсказка</h3>
+                            <p>Показать следующий ход</p>
+                            <div class="item-price">
+                                <span class="coin-icon">🟨</span>
+                                <span>50</span>
+                            </div>
+                        </div>
+                        <button class="buy-btn">Купить</button>
+                    </div>
+                    
+                    <div class="shop-item" data-item="autosolve">
+                        <div class="item-preview">🤖</div>
+                        <div class="item-info">
+                            <h3>Авто-решение</h3>
+                            <p>Автоматическая сборка кубика</p>
+                            <div class="item-price">
+                                <span class="coin-icon">🟨</span>
+                                <span>200</span>
+                            </div>
+                        </div>
+                        <button class="buy-btn">Купить</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
