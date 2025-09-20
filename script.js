@@ -10,6 +10,11 @@ class ProCubeGame {
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         
+        // Очередь ходов и настройки анимации
+        this.moveQueue = [];
+        this.isProcessingQueue = false;
+        this.rotationDurationMs = 220;
+        
         // Состояние игры
         this.isRotating = false;
         this.isDraggingCamera = false;
@@ -47,6 +52,7 @@ class ProCubeGame {
         this.createLighting();
         this.createCube();
         this.setupEventListeners();
+        this.setupMobileControls();
         this.updateUI();
         this.animate();
     }
@@ -188,22 +194,25 @@ class ProCubeGame {
         });
     }
     
-    // ================== УПРАВЛЕНИЕ КАМЕРОЙ ==================
+    // ================== УПРАВЛЕНИЕ КАМЕРОЙ И МОБИЛЬНЫЕ КОНТРОЛИ ==================
     setupCameraControls() {
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
+        let touchStartTime = 0;
+        let touchStartPosition = { x: 0, y: 0 };
+        let lastTouchTime = 0;
         
         const canvas = this.renderer.domElement;
         
-        // Оптимизированные обработчики мыши
+        // Оптимизированные обработчики мыши для десктопа
         canvas.addEventListener('mousedown', (e) => {
             if (this.isRotating || this.isShuffling) return;
             
             // Проверяем клик по кубику
             if (!this.checkCubeClick(e)) {
-            isDragging = true;
+                isDragging = true;
                 this.isDraggingCamera = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+                previousMousePosition = { x: e.clientX, y: e.clientY };
             }
         }, { passive: false });
         
@@ -213,13 +222,13 @@ class ProCubeGame {
             // Throttle движения мыши для производительности
             if (!this.mouseThrottle) {
                 this.mouseThrottle = setTimeout(() => {
-            const deltaMove = {
-                x: e.clientX - previousMousePosition.x,
-                y: e.clientY - previousMousePosition.y
-            };
-            
-            this.rotateCameraAroundCube(deltaMove);
-            previousMousePosition = { x: e.clientX, y: e.clientY };
+                    const deltaMove = {
+                        x: e.clientX - previousMousePosition.x,
+                        y: e.clientY - previousMousePosition.y
+                    };
+                    
+                    this.rotateCameraAroundCube(deltaMove);
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
                     this.mouseThrottle = null;
                 }, 16); // 60 FPS
             }
@@ -230,42 +239,284 @@ class ProCubeGame {
             this.isDraggingCamera = false;
         }, { passive: true });
         
-        // Тач для мобильных устройств
+        // Блокируем контекстное меню для правого клика (используем его как R')
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        // ================ УЛУЧШЕННЫЕ ТАЧ-КОНТРОЛИ ДЛЯ МОБИЛЬНЫХ ================
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
+            
             if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                touchStartTime = Date.now();
+                touchStartPosition = { x: touch.clientX, y: touch.clientY };
+                
                 if (this.isRotating || this.isShuffling) return;
                 
-                if (!this.checkCubeTouchClick(e.touches[0])) {
-                isDragging = true;
+                // Попробуем сначала обработать как клик по кубику
+                if (!this.checkCubeTouchClick(touch)) {
+                    isDragging = true;
                     this.isDraggingCamera = true;
                     previousMousePosition = {
-                    x: e.touches[0].clientX,
-                    y: e.touches[0].clientY
-                };
+                        x: touch.clientX,
+                        y: touch.clientY
+                    };
                 }
+            } else if (e.touches.length === 2) {
+                // Двойное касание - масштабирование
+                this.handlePinchStart(e);
             }
-        });
+        }, { passive: false });
         
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            if (!isDragging || !this.isDraggingCamera || e.touches.length !== 1) return;
             
-            const touch = e.touches[0];
-            const deltaMove = {
-                x: touch.clientX - previousMousePosition.x,
-                y: touch.clientY - previousMousePosition.y
-            };
-            
-            this.rotateCameraAroundCube(deltaMove);
-            previousMousePosition = { x: touch.clientX, y: touch.clientY };
-        });
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                
+                if (isDragging && this.isDraggingCamera) {
+                    // Обычное вращение камеры
+                    const deltaMove = {
+                        x: touch.clientX - previousMousePosition.x,
+                        y: touch.clientY - previousMousePosition.y
+                    };
+                    
+                    this.rotateCameraAroundCube(deltaMove);
+                    previousMousePosition = { x: touch.clientX, y: touch.clientY };
+                } else if (!this.isRotating && !this.isShuffling) {
+                    // Проверяем на свайп-жесты для поворота кубика
+                    this.handleTouchSwipe(touchStartPosition, { x: touch.clientX, y: touch.clientY });
+                }
+            } else if (e.touches.length === 2) {
+                // Масштабирование
+                this.handlePinchMove(e);
+            }
+        }, { passive: false });
         
         canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
+            
+            const touchEndTime = Date.now();
+            const touchDuration = touchEndTime - touchStartTime;
+            
+            // Если было быстрое касание (тап), проверяем на двойной тап
+            if (touchDuration < 300 && !isDragging) {
+                const timeSinceLastTouch = touchEndTime - lastTouchTime;
+                
+                if (timeSinceLastTouch < 300) {
+                    // Двойной тап - поворот вида
+                    this.handleDoubleTap();
+                }
+                
+                lastTouchTime = touchEndTime;
+            }
+            
             isDragging = false;
             this.isDraggingCamera = false;
-        });
+            touchStartTime = 0;
+        }, { passive: false });
+        
+        // Предотвращение стандартных жестов браузера
+        canvas.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+        canvas.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+        canvas.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+    }
+    
+    // ================ ОБРАБОТКА СВАЙП-ЖЕСТОВ ================
+    handleTouchSwipe(startPos, endPos) {
+        const deltaX = endPos.x - startPos.x;
+        const deltaY = endPos.y - startPos.y;
+        const minSwipeDistance = 50; // Минимальное расстояние для свайпа
+        
+        // Проверяем, достаточно ли длинный свайп
+        if (Math.abs(deltaX) < minSwipeDistance && Math.abs(deltaY) < minSwipeDistance) {
+            return;
+        }
+        
+        // Определяем направление свайпа
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            // Горизонтальный свайп
+            if (deltaX > 0) {
+                // Свайп вправо
+                this.handleSwipeGesture('right');
+            } else {
+                // Свайп влево
+                this.handleSwipeGesture('left');
+            }
+        } else {
+            // Вертикальный свайп
+            if (deltaY > 0) {
+                // Свайп вниз
+                this.handleSwipeGesture('down');
+            } else {
+                // Свайп вверх
+                this.handleSwipeGesture('up');
+            }
+        }
+    }
+    
+    handleSwipeGesture(direction) {
+        if (this.isRotating || this.isShuffling) return;
+        
+        // Определяем какую грань поворачивать на основе текущего вида камеры
+        const cameraDirection = this.getCameraDirection();
+        let move = '';
+        
+        switch (direction) {
+            case 'up':
+                if (cameraDirection.front) move = 'U';
+                else if (cameraDirection.back) move = 'U\'';
+                else if (cameraDirection.left) move = 'L';
+                else if (cameraDirection.right) move = 'R\'';
+                break;
+            case 'down':
+                if (cameraDirection.front) move = 'D';
+                else if (cameraDirection.back) move = 'D\'';
+                else if (cameraDirection.left) move = 'L\'';
+                else if (cameraDirection.right) move = 'R';
+                break;
+            case 'left':
+                if (cameraDirection.front) move = 'L';
+                else if (cameraDirection.back) move = 'R';
+                else if (cameraDirection.top) move = 'F\'';
+                else if (cameraDirection.bottom) move = 'F';
+                break;
+            case 'right':
+                if (cameraDirection.front) move = 'R';
+                else if (cameraDirection.back) move = 'L\'';
+                else if (cameraDirection.top) move = 'F';
+                else if (cameraDirection.bottom) move = 'F\'';
+                break;
+        }
+        
+        if (move) {
+            this.performRotation(move);
+            this.showSwipeIndicator(direction, move);
+        }
+    }
+    
+    getCameraDirection() {
+        const cameraPos = this.camera.position.clone().normalize();
+        
+        return {
+            front: cameraPos.z > 0.5,
+            back: cameraPos.z < -0.5,
+            left: cameraPos.x < -0.5,
+            right: cameraPos.x > 0.5,
+            top: cameraPos.y > 0.5,
+            bottom: cameraPos.y < -0.5
+        };
+    }
+    
+    showSwipeIndicator(direction, move) {
+        // Показываем индикатор свайпа пользователю
+        const indicator = document.createElement('div');
+        indicator.className = 'swipe-indicator';
+        indicator.textContent = `${this.getDirectionEmoji(direction)} ${move}`;
+        indicator.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 170, 255, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10000;
+            pointer-events: none;
+            animation: swipeIndicatorShow 0.8s ease-out forwards;
+        `;
+        
+        document.body.appendChild(indicator);
+        
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 800);
+    }
+    
+    getDirectionEmoji(direction) {
+        const emojis = {
+            up: '⬆️',
+            down: '⬇️',
+            left: '⬅️',
+            right: '➡️'
+        };
+        return emojis[direction] || '🔄';
+    }
+    
+    handleDoubleTap() {
+        // Двойной тап для автоматического поворота вида
+        this.animateCameraToPosition();
+    }
+    
+    animateCameraToPosition() {
+        const positions = [
+            { x: 8, y: 8, z: 8 },    // Изометрический вид
+            { x: 0, y: 0, z: 12 },   // Фронтальный вид
+            { x: 12, y: 0, z: 0 },   // Боковой вид
+            { x: 0, y: 12, z: 0 }    // Вид сверху
+        ];
+        
+        if (!this.currentViewIndex) this.currentViewIndex = 0;
+        this.currentViewIndex = (this.currentViewIndex + 1) % positions.length;
+        
+        const targetPos = positions[this.currentViewIndex];
+        const duration = 1000;
+        const startPos = this.camera.position.clone();
+        const startTime = Date.now();
+        
+        const animateCamera = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = this.easeInOutCubic(progress);
+            
+            this.camera.position.lerpVectors(startPos, new THREE.Vector3(targetPos.x, targetPos.y, targetPos.z), eased);
+            this.camera.lookAt(0, 0, 0);
+            
+            if (progress < 1) {
+                requestAnimationFrame(animateCamera);
+            }
+        };
+        
+        animateCamera();
+    }
+    
+    // Масштабирование для мобильных (пинч)
+    handlePinchStart(e) {
+        if (e.touches.length === 2) {
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            this.lastPinchDistance = Math.sqrt(
+                Math.pow(touch2.clientX - touch1.clientX, 2) +
+                Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+        }
+    }
+    
+    handlePinchMove(e) {
+        if (e.touches.length === 2 && this.lastPinchDistance) {
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            const currentDistance = Math.sqrt(
+                Math.pow(touch2.clientX - touch1.clientX, 2) +
+                Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+            
+            const scale = currentDistance / this.lastPinchDistance;
+            
+            // Масштабируем камеру
+            const newDistance = this.camera.position.length() / scale;
+            const clampedDistance = Math.max(5, Math.min(15, newDistance));
+            
+            this.camera.position.normalize().multiplyScalar(clampedDistance);
+            this.camera.lookAt(0, 0, 0);
+            
+            this.lastPinchDistance = currentDistance;
+        }
     }
     
     rotateCameraAroundCube(deltaMove) {
@@ -304,7 +555,9 @@ class ProCubeGame {
                 const face = intersects[0].face;
                 const move = this.getMoveFromFace(cubelet, face);
                 if (move) {
-                    this.performRotation(move);
+                    const isPrime = !!(event && (event.shiftKey || event.button === 2 || event.altKey || event.ctrlKey));
+                    const finalMove = isPrime ? `${move}'` : move;
+                    this.performRotation(finalMove);
                     return true;
                 }
             }
@@ -357,21 +610,57 @@ class ProCubeGame {
     
     // ================== ЛОГИКА ПОВОРОТОВ ==================
     performRotation(move) {
-        if (this.isRotating || this.isShuffling) return;
+        // Очередь ходов: если сейчас идет поворот, добавляем в очередь
+        if (this.isRotating) {
+            this.moveQueue.push(move);
+            return;
+        }
+        
+        const parsed = this.parseMove(move);
+        const baseMove = parsed.base;
+        const quarterTurns = parsed.quarterTurns; // может быть -2..2
+        if (!baseMove || quarterTurns === 0) return;
+        
+        const axis = this.getMoveAxis(baseMove);
+        const face = this.getFaceCubelets(baseMove);
+        // Направление угла для согласованности с классическими ходами (R/U/F по часовой стрелке)
+        const baseSign = ['R','U','F'].includes(baseMove) ? 1 : -1;
+        const angle = baseSign * (Math.PI / 2) * quarterTurns;
         
         this.isRotating = true;
-        const axis = this.getMoveAxis(move);
-        const angle = Math.PI / 2;
-        const face = this.getFaceCubelets(move);
-        
-        this.animateRotation(face, axis, angle, move, () => {
+        this.animateRotation(face, axis, angle, baseMove, quarterTurns, () => {
             this.isRotating = false;
             if (!this.isShuffling) {
-            this.incrementMoveCount();
+                this.incrementMoveCount();
                 this.updateProgress();
                 setTimeout(() => this.checkIfSolved(), 100);
             }
+            // Продолжаем очередь
+            if (this.moveQueue.length > 0) {
+                const next = this.moveQueue.shift();
+                // Небольшая пауза для плавности
+                setTimeout(() => this.performRotation(next), 10);
+            }
+            // Если это была сессия перемешивания и очередь пуста – завершаем
+            if (this.isShuffling && this.moveQueue.length === 0 && !this.isRotating) {
+                this.isShuffling = false;
+                this.resetMoveCount();
+                this.resetTimer();
+                this.isSolved = false;
+                this.updateGameStatus('🎯 Кубик перемешан! Начните сборку!');
+                this.updateProgress();
+            }
         });
+    }
+
+    parseMove(move) {
+        // Поддержка форматов: "R", "R'", "R2"
+        if (!move || typeof move !== 'string') return { base: null, quarterTurns: 0 };
+        const base = move[0];
+        let quarterTurns = 1;
+        if (move.includes("2")) quarterTurns = 2;
+        if (move.includes("'")) quarterTurns = -quarterTurns;
+        return { base, quarterTurns };
     }
     
     getMoveAxis(move) {
@@ -405,52 +694,51 @@ class ProCubeGame {
         });
     }
     
-    animateRotation(cubelets, axis, angle, move, callback) {
+    animateRotation(cubelets, axis, angle, baseMove, quarterTurns, callback) {
         const group = new THREE.Group();
         this.scene.add(group);
         
-        // Определяем направление поворота
-        const clockwise = ['R', 'U', 'F'].includes(move);
-        const finalAngle = clockwise ? angle : -angle;
-        
-        // Перемещаем кубики в группу
+        // Перемещаем кубики в группу-поворот
         cubelets.forEach(cubelet => {
             this.cube.remove(cubelet);
             group.add(cubelet);
         });
         
-        const startRotation = group.rotation.clone();
-        const targetRotation = startRotation.clone();
+        // Кватернионы для плавного поворота
+        const startQuat = group.quaternion.clone();
+        const deltaQuat = new THREE.Quaternion().setFromAxisAngle(axis.clone().normalize(), angle);
+        const endQuat = startQuat.clone().multiply(deltaQuat);
         
-        if (axis.x) targetRotation.x += finalAngle;
-        if (axis.y) targetRotation.y += finalAngle;
-        if (axis.z) targetRotation.z += finalAngle;
-        
-        const duration = 250; // Ускоряем анимацию
+        const duration = this.rotationDurationMs;
         const startTime = Date.now();
         
         const animate = () => {
             const elapsed = Date.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const eased = this.easeInOutCubic(progress);
-            
-            group.rotation.lerpVectors(startRotation, targetRotation, eased);
+            group.quaternion.slerpQuaternions(startQuat, endQuat, eased);
             
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
-                // Возвращаем кубики обратно в основную группу
+                // Зафиксировать итоговую ориентацию
+                group.quaternion.copy(endQuat);
+                group.updateMatrixWorld(true);
+                
+                // Применяем трансформацию к каждому кубику и возвращаем в основной контейнер
+                const rotMatrix = new THREE.Matrix4().makeRotationFromQuaternion(endQuat);
                 cubelets.forEach(cubelet => {
                     group.remove(cubelet);
                     this.cube.add(cubelet);
                     
-                    // Применяем трансформацию
-                    cubelet.position.applyMatrix4(group.matrix);
-                    cubelet.rotation.setFromRotationMatrix(group.matrix);
+                    // Позиция
+                    cubelet.position.applyMatrix4(rotMatrix);
+                    // Ориентация
+                    cubelet.quaternion.premultiply(endQuat);
                 });
                 
                 this.scene.remove(group);
-                this.updateCubeletData(cubelets, move);
+                this.updateCubeletData(cubelets, baseMove, quarterTurns);
                 
                 if (callback) callback();
             }
@@ -463,39 +751,49 @@ class ProCubeGame {
         return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
     }
     
-    updateCubeletData(cubelets, move) {
-        cubelets.forEach(cubelet => {
-            const { x, y, z } = cubelet.userData.currentPosition;
+    updateCubeletData(cubelets, baseMove, quarterTurns) {
+        const turns = Math.abs(quarterTurns) % 4;
+        const dir = quarterTurns >= 0 ? 1 : -1; // 1: по часовой, -1: против
+        if (turns === 0) return;
+        
+        const applyTurn = (pos) => {
+            let { x, y, z } = pos;
             let newX = x, newY = y, newZ = z;
-            
-            switch (move) {
+            switch (baseMove) {
                 case 'R':
-                    newY = z;
-                    newZ = -y;
+                    if (dir === 1) { newY = z; newZ = -y; } else { newY = -z; newZ = y; }
                     break;
                 case 'L':
-                newY = -z;
-                newZ = y;
+                    if (dir === 1) { newY = -z; newZ = y; } else { newY = z; newZ = -y; }
                     break;
                 case 'U':
-                    newX = -z;
-                    newZ = x;
+                    if (dir === 1) { newX = -z; newZ = x; } else { newX = z; newZ = -x; }
                     break;
                 case 'D':
-                newX = z;
-                newZ = -x;
+                    if (dir === 1) { newX = z; newZ = -x; } else { newX = -z; newZ = x; }
                     break;
                 case 'F':
-                    newX = y;
-                    newY = -x;
+                    if (dir === 1) { newX = y; newY = -x; } else { newX = -y; newY = x; }
                     break;
                 case 'B':
-                newX = -y;
-                newY = x;
+                    if (dir === 1) { newX = -y; newY = x; } else { newX = y; newY = -x; }
                     break;
             }
-            
-            cubelet.userData.currentPosition = { x: newX, y: newY, z: newZ };
+            return { x: newX, y: newY, z: newZ };
+        };
+        
+        cubelets.forEach(cubelet => {
+            let pos = cubelet.userData.currentPosition;
+            for (let i = 0; i < turns; i++) {
+                pos = applyTurn(pos);
+            }
+            // Нормируем (избегаем -0)
+            pos = { x: Math.sign(pos.x) * Math.min(Math.abs(pos.x), 1), y: Math.sign(pos.y) * Math.min(Math.abs(pos.y), 1), z: Math.sign(pos.z) * Math.min(Math.abs(pos.z), 1) };
+            cubelet.userData.currentPosition = pos;
+            // Подровняем позицию по сетке (устранение накопленной погрешности)
+            cubelet.position.x = Math.round(cubelet.position.x * 20) / 20;
+            cubelet.position.y = Math.round(cubelet.position.y * 20) / 20;
+            cubelet.position.z = Math.round(cubelet.position.z * 20) / 20;
         });
     }
     
@@ -506,53 +804,25 @@ class ProCubeGame {
         this.isShuffling = true;
         this.updateGameStatus('🔀 Перемешивание кубика...');
         
-        // Расширенный набор ходов для большего хаоса
-        const moves = ['R', 'R\'', 'L', 'L\'', 'U', 'U\'', 'D', 'D\'', 'F', 'F\'', 'B', 'B\''];
-        const numMoves = 50; // Увеличиваем количество ходов для настоящего хаоса
-        let moveCount = 0;
-        let previousMove = '';
+        const moves = ['R', "R'", 'L', "L'", 'U', "U'", 'D', "D'", 'F', "F'", 'B', "B'"];
+        const numMoves = 50;
+        let previousBase = '';
         
-        const performMove = () => {
-            if (moveCount < numMoves) {
-                let randomMove;
-                // Избегаем повторения одного и того же хода подряд
-                do {
-                    randomMove = moves[Math.floor(Math.random() * moves.length)];
-                } while (randomMove === previousMove);
-                
-                previousMove = randomMove;
-                
-                // Преобразуем обратные ходы (с апострофом) в обычные для выполнения
-                const move = randomMove.includes('\'') ? randomMove.charAt(0) : randomMove;
-                const isReverse = randomMove.includes('\'');
-                
-                // Выполняем ход (для обратных ходов делаем 3 поворота вместо 1)
-                if (isReverse) {
-                    this.performRotation(move);
-                    setTimeout(() => {
-                        this.performRotation(move);
-                        setTimeout(() => {
-                            this.performRotation(move);
-                moveCount++;
-                            setTimeout(performMove, 150);
-                        }, 150);
-                    }, 150);
-                } else {
-                    this.performRotation(move);
-                    moveCount++;
-                    setTimeout(performMove, 150);
-                }
-            } else {
-                this.isShuffling = false;
-                this.resetMoveCount();
-                this.resetTimer();
-                this.isSolved = false;
-                this.updateGameStatus('🎯 Кубик перемешан! Начните сборку!');
-                this.updateProgress();
-            }
-        };
-        
-        performMove();
+        const sequence = [];
+        for (let i = 0; i < numMoves; i++) {
+            let m;
+            do {
+                m = moves[Math.floor(Math.random() * moves.length)];
+            } while (m[0] === previousBase); // не повторяем одну и ту же грань подряд
+            previousBase = m[0];
+            sequence.push(m);
+        }
+        // Заливаем в очередь и запускаем
+        this.moveQueue.push(...sequence);
+        if (!this.isRotating) {
+            const next = this.moveQueue.shift();
+            this.performRotation(next);
+        }
     }
     
     reset() {
@@ -698,22 +968,7 @@ class ProCubeGame {
     }
     
     performSolveRotation(move) {
-        // Определяем направление поворота
-        const isReverse = move.includes("'");
-        const baseMove = isReverse ? move.charAt(0) : move;
-        
-        if (isReverse) {
-            // Для обратного хода делаем 3 поворота
-            this.performRotation(baseMove);
-            setTimeout(() => {
-                this.performRotation(baseMove);
-                setTimeout(() => {
-                    this.performRotation(baseMove);
-                }, 150);
-            }, 150);
-        } else {
-            this.performRotation(baseMove);
-        }
+        this.performRotation(move);
     }
     
     updateSolveUI() {
@@ -787,16 +1042,21 @@ class ProCubeGame {
         const faces = {
             right: [], left: [], top: [], bottom: [], front: [], back: []
         };
+        const vX = new THREE.Vector3(1, 0, 0);
+        const vNX = new THREE.Vector3(-1, 0, 0);
+        const vY = new THREE.Vector3(0, 1, 0);
+        const vNY = new THREE.Vector3(0, -1, 0);
+        const vZ = new THREE.Vector3(0, 0, 1);
+        const vNZ = new THREE.Vector3(0, 0, -1);
         
         this.cubelets.forEach(cubelet => {
             const { x, y, z } = cubelet.userData.currentPosition;
-            
-            if (x === 1) faces.right.push(cubelet.material[0].color.getHex());
-            if (x === -1) faces.left.push(cubelet.material[1].color.getHex());
-            if (y === 1) faces.top.push(cubelet.material[2].color.getHex());
-            if (y === -1) faces.bottom.push(cubelet.material[3].color.getHex());
-            if (z === 1) faces.front.push(cubelet.material[4].color.getHex());
-            if (z === -1) faces.back.push(cubelet.material[5].color.getHex());
+            if (x === 1) faces.right.push(this.getOutwardFaceColor(cubelet, vX));
+            if (x === -1) faces.left.push(this.getOutwardFaceColor(cubelet, vNX));
+            if (y === 1) faces.top.push(this.getOutwardFaceColor(cubelet, vY));
+            if (y === -1) faces.bottom.push(this.getOutwardFaceColor(cubelet, vNY));
+            if (z === 1) faces.front.push(this.getOutwardFaceColor(cubelet, vZ));
+            if (z === -1) faces.back.push(this.getOutwardFaceColor(cubelet, vNZ));
         });
         
         const solved = Object.values(faces).every(faceColors => {
@@ -936,16 +1196,21 @@ class ProCubeGame {
         const faces = {
             right: [], left: [], top: [], bottom: [], front: [], back: []
         };
+        const vX = new THREE.Vector3(1, 0, 0);
+        const vNX = new THREE.Vector3(-1, 0, 0);
+        const vY = new THREE.Vector3(0, 1, 0);
+        const vNY = new THREE.Vector3(0, -1, 0);
+        const vZ = new THREE.Vector3(0, 0, 1);
+        const vNZ = new THREE.Vector3(0, 0, -1);
         
         this.cubelets.forEach(cubelet => {
             const { x, y, z } = cubelet.userData.currentPosition;
-            
-            if (x === 1) faces.right.push(cubelet.material[0].color.getHex());
-            if (x === -1) faces.left.push(cubelet.material[1].color.getHex());
-            if (y === 1) faces.top.push(cubelet.material[2].color.getHex());
-            if (y === -1) faces.bottom.push(cubelet.material[3].color.getHex());
-            if (z === 1) faces.front.push(cubelet.material[4].color.getHex());
-            if (z === -1) faces.back.push(cubelet.material[5].color.getHex());
+            if (x === 1) faces.right.push(this.getOutwardFaceColor(cubelet, vX));
+            if (x === -1) faces.left.push(this.getOutwardFaceColor(cubelet, vNX));
+            if (y === 1) faces.top.push(this.getOutwardFaceColor(cubelet, vY));
+            if (y === -1) faces.bottom.push(this.getOutwardFaceColor(cubelet, vNY));
+            if (z === 1) faces.front.push(this.getOutwardFaceColor(cubelet, vZ));
+            if (z === -1) faces.back.push(this.getOutwardFaceColor(cubelet, vNZ));
         });
         
         let solvedFaces = 0;
@@ -958,6 +1223,26 @@ class ProCubeGame {
         });
         
         return (solvedFaces / 6) * 100;
+    }
+
+    getOutwardFaceColor(cubelet, worldAxisVec) {
+        const localNormals = [
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 1, 0),
+            new THREE.Vector3(0, -1, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, -1),
+        ];
+        const wq = cubelet.getWorldQuaternion(new THREE.Quaternion());
+        let bestIdx = 0;
+        let bestDot = -Infinity;
+        for (let i = 0; i < 6; i++) {
+            const n = localNormals[i].clone().applyQuaternion(wq).normalize();
+            const d = n.dot(worldAxisVec);
+            if (d > bestDot) { bestDot = d; bestIdx = i; }
+        }
+        return cubelet.material[bestIdx].color.getHex();
     }
     
     // ================== ПОЛЬЗОВАТЕЛЬСКИЙ ИНТЕРФЕЙС ==================
@@ -1139,6 +1424,193 @@ class ProCubeGame {
         
         // Управление камерой
         this.setupCameraControls();
+    }
+    
+    // ================== МОБИЛЬНЫЕ КОНТРОЛИ ==================
+    setupMobileControls() {
+        // Определяем мобильное устройство
+        const isMobile = window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            // Показываем мобильные элементы
+            document.getElementById('floatingMobileBtn').style.display = 'block';
+            document.getElementById('mobileControls').style.display = 'block';
+            
+            // Автоматически показываем мобильную панель через 2 секунды
+            setTimeout(() => {
+                this.showMobileHelp();
+            }, 2000);
+        }
+        
+        // Обработчики для мобильной панели
+        document.getElementById('floatingMobileBtn').addEventListener('click', () => {
+            this.toggleMobileControls();
+        });
+        
+        document.getElementById('toggleMobileControls').addEventListener('click', () => {
+            this.toggleMobileControls();
+        });
+        
+        // Обработчики для мобильных кнопок ходов
+        document.querySelectorAll('.mobile-move-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const move = e.target.getAttribute('data-move');
+                if (move) {
+                    this.handleMobileMove(move);
+                }
+            });
+            
+            // Добавляем тактильную обратную связь
+            btn.addEventListener('touchstart', () => {
+                if (navigator.vibrate) {
+                    navigator.vibrate(50); // Короткая вибрация
+                }
+            });
+        });
+        
+        // Добавляем swipe-индикатор в начале
+        if (isMobile) {
+            this.showSwipeHelp();
+        }
+    }
+    
+    toggleMobileControls() {
+        const mobileControls = document.getElementById('mobileControls');
+        const isActive = mobileControls.classList.contains('active');
+        
+        if (isActive) {
+            mobileControls.classList.remove('active');
+            document.getElementById('floatingMobileBtn').textContent = '🎮';
+        } else {
+            mobileControls.classList.add('active');
+            document.getElementById('floatingMobileBtn').textContent = '✖️';
+        }
+    }
+    
+    handleMobileMove(move) {
+        if (this.isRotating || this.isShuffling) {
+            this.updateGameStatus('⏳ Подождите завершения текущего хода...');
+            return;
+        }
+        
+        // Показываем индикатор хода
+        this.showMoveIndicator(move);
+        
+        // Выполняем ход (поддержка ' и 2 внутри performRotation)
+        this.performRotation(move);
+        
+        // Обновляем статистику если не в режиме перемешивания
+        if (!this.isShuffling) {
+            // incrementMoveCount вызывается внутри performRotation
+            setTimeout(() => this.checkIfSolved(), 300);
+        }
+    }
+    
+    showMoveIndicator(move) {
+        const indicator = document.createElement('div');
+        indicator.className = 'move-indicator';
+        indicator.textContent = `🎯 ${move}`;
+        indicator.style.cssText = `
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 170, 255, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 10000;
+            pointer-events: none;
+            animation: moveIndicatorShow 0.6s ease-out forwards;
+            font-family: 'Orbitron', monospace;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        `;
+        
+        document.body.appendChild(indicator);
+        
+        setTimeout(() => {
+            if (indicator.parentNode) {
+                indicator.parentNode.removeChild(indicator);
+            }
+        }, 600);
+    }
+    
+    showMobileHelp() {
+        if (!localStorage.getItem('procube_mobile_help_shown')) {
+            const helpModal = document.createElement('div');
+            helpModal.className = 'mobile-help-modal';
+            helpModal.innerHTML = `
+                <div class="mobile-help-content">
+                    <h2>📱 Добро пожаловать в мобильную версию!</h2>
+                    <div class="help-section">
+                        <h3>🎮 Управление кубиком:</h3>
+                        <p>• <strong>Свайп</strong> по кубику для поворота граней</p>
+                        <p>• <strong>Двойной тап</strong> для смены угла обзора</p>
+                        <p>• <strong>Пинч</strong> для масштабирования</p>
+                        <p>• <strong>Перетаскивание</strong> для вращения камеры</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>🎯 Быстрые ходы:</h3>
+                        <p>• Нажмите на кнопку 🎮 внизу для панели ходов</p>
+                        <p>• Используйте кнопки для точных поворотов</p>
+                    </div>
+                    <button id="closeMobileHelp" class="help-close-btn">Понятно! 👍</button>
+                </div>
+            `;
+            
+            helpModal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+                animation: fadeIn 0.3s ease;
+            `;
+            
+            document.body.appendChild(helpModal);
+            
+            document.getElementById('closeMobileHelp').addEventListener('click', () => {
+                document.body.removeChild(helpModal);
+                localStorage.setItem('procube_mobile_help_shown', 'true');
+            });
+        }
+    }
+    
+    showSwipeHelp() {
+        setTimeout(() => {
+            const swipeHelp = document.createElement('div');
+            swipeHelp.textContent = '👆 Попробуйте свайп по кубику!';
+            swipeHelp.style.cssText = `
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(255, 136, 0, 0.9);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 20px;
+                font-size: 16px;
+                font-weight: bold;
+                z-index: 9999;
+                animation: swipeHelpShow 3s ease-out forwards;
+                font-family: 'Exo 2', sans-serif;
+            `;
+            
+            document.body.appendChild(swipeHelp);
+            
+            setTimeout(() => {
+                if (swipeHelp.parentNode) {
+                    swipeHelp.parentNode.removeChild(swipeHelp);
+                }
+            }, 3000);
+        }, 1000);
     }
     
     onWindowResize() {

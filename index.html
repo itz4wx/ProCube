@@ -93,6 +93,35 @@
             </button>
         </div>
         
+        <!-- Мобильная панель быстрых действий -->
+        <div class="mobile-quick-controls" id="mobileControls" style="display: none;">
+            <div class="mobile-controls-header">
+                <h3>🎮 Быстрые ходы</h3>
+                <button id="toggleMobileControls" class="toggle-mobile-btn">📱</button>
+            </div>
+            <div class="mobile-move-grid">
+                <button class="mobile-move-btn" data-move="U">⬆️<br>U</button>
+                <button class="mobile-move-btn" data-move="U'">⬆️<br>U'</button>
+                <button class="mobile-move-btn" data-move="R">➡️<br>R</button>
+                <button class="mobile-move-btn" data-move="R'">➡️<br>R'</button>
+                <button class="mobile-move-btn" data-move="F">⬇️<br>F</button>
+                <button class="mobile-move-btn" data-move="F'">⬇️<br>F'</button>
+                <button class="mobile-move-btn" data-move="D">⬇️<br>D</button>
+                <button class="mobile-move-btn" data-move="D'">⬇️<br>D'</button>
+                <button class="mobile-move-btn" data-move="L">⬅️<br>L</button>
+                <button class="mobile-move-btn" data-move="L'">⬅️<br>L'</button>
+                <button class="mobile-move-btn" data-move="B">⬆️<br>B</button>
+                <button class="mobile-move-btn" data-move="B'">⬆️<br>B'</button>
+            </div>
+            <div class="mobile-gesture-help">
+                <p>💡 <strong>Тач-жесты:</strong></p>
+                <p>• Свайп для поворота граней</p>
+                <p>• Двойной тап для смены вида</p>
+                <p>• Пинч для масштабирования</p>
+                <p>• Перетаскивание для вращения камеры</p>
+            </div>
+        </div>
+        
         <!-- Информационная панель -->
         <div class="game-info">
             <div class="info-grid">
@@ -252,6 +281,9 @@
             </div>
         </div>
     </div>
+    
+    <!-- Плавающая кнопка мобильного меню -->
+    <button id="floatingMobileBtn" class="floating-mobile-btn">🎮</button>
 
     <script src="script.js"></script>
 </body>
