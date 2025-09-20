@@ -64,53 +64,31 @@ class ProCubeGame {
         this.camera.position.set(8, 8, 8);
         this.camera.lookAt(0, 0, 0);
         
-        // Рендерер
+        // Рендерер (оптимизирован)
         this.renderer = new THREE.WebGLRenderer({ 
             canvas: canvas,
-            antialias: true,
-            alpha: true
+            antialias: false, // Отключаем для производительности
+            alpha: false,
+            powerPreference: "high-performance"
         });
         this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setClearColor(0x001122, 0);
+        this.renderer.shadowMap.enabled = false; // Отключаем тени
+        this.renderer.setClearColor(0x001122, 1);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Ограничиваем DPI
         
         // Обработка изменения размера окна
         window.addEventListener('resize', () => this.onWindowResize());
     }
     
     createLighting() {
-        // Окружающий свет
-        const ambientLight = new THREE.AmbientLight(0x404080, 0.6);
+        // Простое освещение для производительности
+        const ambientLight = new THREE.AmbientLight(0x404080, 0.8);
         this.scene.add(ambientLight);
         
-        // Основной направленный свет
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        mainLight.position.set(10, 15, 10);
-        mainLight.castShadow = true;
-        mainLight.shadow.mapSize.width = 2048;
-        mainLight.shadow.mapSize.height = 2048;
-        mainLight.shadow.camera.near = 1;
-        mainLight.shadow.camera.far = 50;
-        mainLight.shadow.camera.left = -10;
-        mainLight.shadow.camera.right = 10;
-        mainLight.shadow.camera.top = 10;
-        mainLight.shadow.camera.bottom = -10;
+        // Один основной источник света
+        const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        mainLight.position.set(10, 10, 5);
         this.scene.add(mainLight);
-        
-        // Дополнительные источники света
-        const fillLight1 = new THREE.DirectionalLight(0x4080ff, 0.4);
-        fillLight1.position.set(-10, 5, 10);
-        this.scene.add(fillLight1);
-        
-        const fillLight2 = new THREE.DirectionalLight(0x80aaff, 0.3);
-        fillLight2.position.set(5, -5, -10);
-        this.scene.add(fillLight2);
-        
-        // Точечный свет для дополнительного освещения
-        const pointLight = new THREE.PointLight(0xffffff, 0.8, 50);
-        pointLight.position.set(0, 10, 0);
-        this.scene.add(pointLight);
     }
     
     // ================== СОЗДАНИЕ КУБИКА ==================
@@ -122,9 +100,9 @@ class ProCubeGame {
         this.cube = new THREE.Group();
         this.cubelets = [];
         
-        // Увеличенный размер кубика
-        const size = 1.4;
-        const gap = 0.08;
+        // Оптимизированный размер кубика
+        const size = 1.2;
+        const gap = 0.05;
         const spacing = size + gap;
         
         // Создание 27 маленьких кубиков (3x3x3)
@@ -149,31 +127,31 @@ class ProCubeGame {
     }
     
     createCubelet(size) {
-        const geometry = new THREE.BoxGeometry(size, size, size);
+        // Переиспользуем геометрию для всех кубиков
+        if (!this.sharedGeometry) {
+            // Упрощенная геометрия для производительности
+            this.sharedGeometry = new THREE.BoxGeometry(size, size, size, 1, 1, 1);
+        }
         
-        // Создание улучшенных материалов
+        // Простые материалы для производительности
         const materials = [];
         for (let i = 0; i < 6; i++) {
-            const material = new THREE.MeshPhongMaterial({ 
-                color: this.colors.black,
-                shininess: 100,
-                specular: 0x333333,
-                transparent: false
+            const material = new THREE.MeshLambertMaterial({ 
+                color: this.colors.black
             });
             materials.push(material);
         }
         
-        const cubelet = new THREE.Mesh(geometry, materials);
-        cubelet.castShadow = true;
-        cubelet.receiveShadow = true;
+        const cubelet = new THREE.Mesh(this.sharedGeometry, materials);
         
-        // Добавление рамки для каждой грани
-        const edges = new THREE.EdgesGeometry(geometry);
-        const lineMaterial = new THREE.LineBasicMaterial({ 
-            color: 0x000000, 
-            linewidth: 3 
-        });
-        const wireframe = new THREE.LineSegments(edges, lineMaterial);
+        // Упрощенная рамка
+        if (!this.sharedEdges) {
+            this.sharedEdges = new THREE.EdgesGeometry(this.sharedGeometry);
+            this.sharedLineMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x000000
+            });
+        }
+        const wireframe = new THREE.LineSegments(this.sharedEdges, this.sharedLineMaterial);
         cubelet.add(wireframe);
         
         return cubelet;
@@ -186,32 +164,26 @@ class ProCubeGame {
             // Правая грань (красная)
             if (x === 1) {
                 cubelet.material[0].color.setHex(this.colors.red);
-                cubelet.material[0].emissive.setHex(0x220000);
             }
             // Левая грань (оранжевая)
             if (x === -1) {
                 cubelet.material[1].color.setHex(this.colors.orange);
-                cubelet.material[1].emissive.setHex(0x221100);
             }
             // Верхняя грань (белая)
             if (y === 1) {
                 cubelet.material[2].color.setHex(this.colors.white);
-                cubelet.material[2].emissive.setHex(0x222222);
             }
             // Нижняя грань (желтая)
             if (y === -1) {
                 cubelet.material[3].color.setHex(this.colors.yellow);
-                cubelet.material[3].emissive.setHex(0x222200);
             }
             // Передняя грань (зеленая)
             if (z === 1) {
                 cubelet.material[4].color.setHex(this.colors.green);
-                cubelet.material[4].emissive.setHex(0x002200);
             }
             // Задняя грань (синяя)
             if (z === -1) {
                 cubelet.material[5].color.setHex(this.colors.blue);
-                cubelet.material[5].emissive.setHex(0x000022);
             }
         });
     }
@@ -223,21 +195,24 @@ class ProCubeGame {
         
         const canvas = this.renderer.domElement;
         
-        // Мышь
+        // Оптимизированные обработчики мыши
         canvas.addEventListener('mousedown', (e) => {
             if (this.isRotating || this.isShuffling) return;
             
             // Проверяем клик по кубику
             if (!this.checkCubeClick(e)) {
-                isDragging = true;
+            isDragging = true;
                 this.isDraggingCamera = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
+            previousMousePosition = { x: e.clientX, y: e.clientY };
             }
-        });
+        }, { passive: false });
         
         canvas.addEventListener('mousemove', (e) => {
             if (!isDragging || !this.isDraggingCamera) return;
             
+            // Throttle движения мыши для производительности
+            if (!this.mouseThrottle) {
+                this.mouseThrottle = setTimeout(() => {
             const deltaMove = {
                 x: e.clientX - previousMousePosition.x,
                 y: e.clientY - previousMousePosition.y
@@ -245,12 +220,15 @@ class ProCubeGame {
             
             this.rotateCameraAroundCube(deltaMove);
             previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
+                    this.mouseThrottle = null;
+                }, 16); // 60 FPS
+            }
+        }, { passive: true });
         
         canvas.addEventListener('mouseup', () => {
             isDragging = false;
             this.isDraggingCamera = false;
-        });
+        }, { passive: true });
         
         // Тач для мобильных устройств
         canvas.addEventListener('touchstart', (e) => {
@@ -259,12 +237,12 @@ class ProCubeGame {
                 if (this.isRotating || this.isShuffling) return;
                 
                 if (!this.checkCubeTouchClick(e.touches[0])) {
-                    isDragging = true;
+                isDragging = true;
                     this.isDraggingCamera = true;
                     previousMousePosition = {
-                        x: e.touches[0].clientX,
-                        y: e.touches[0].clientY
-                    };
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY
+                };
                 }
             }
         });
@@ -389,7 +367,7 @@ class ProCubeGame {
         this.animateRotation(face, axis, angle, move, () => {
             this.isRotating = false;
             if (!this.isShuffling) {
-                this.incrementMoveCount();
+            this.incrementMoveCount();
                 this.updateProgress();
                 setTimeout(() => this.checkIfSolved(), 100);
             }
@@ -448,7 +426,7 @@ class ProCubeGame {
         if (axis.y) targetRotation.y += finalAngle;
         if (axis.z) targetRotation.z += finalAngle;
         
-        const duration = 400;
+        const duration = 250; // Ускоряем анимацию
         const startTime = Date.now();
         
         const animate = () => {
@@ -496,24 +474,24 @@ class ProCubeGame {
                     newZ = -y;
                     break;
                 case 'L':
-                    newY = -z;
-                    newZ = y;
+                newY = -z;
+                newZ = y;
                     break;
                 case 'U':
                     newX = -z;
                     newZ = x;
                     break;
                 case 'D':
-                    newX = z;
-                    newZ = -x;
+                newX = z;
+                newZ = -x;
                     break;
                 case 'F':
                     newX = y;
                     newY = -x;
                     break;
                 case 'B':
-                    newX = -y;
-                    newY = x;
+                newX = -y;
+                newY = x;
                     break;
             }
             
@@ -537,7 +515,7 @@ class ProCubeGame {
                 const randomMove = moves[Math.floor(Math.random() * moves.length)];
                 this.performRotation(randomMove);
                 moveCount++;
-                setTimeout(performMove, 300);
+                setTimeout(performMove, 200); // Ускоряем перемешивание
             } else {
                 this.isShuffling = false;
                 this.resetMoveCount();
@@ -639,21 +617,8 @@ class ProCubeGame {
     }
     
     victoryEffect() {
-        // Эффект свечения
-        this.cubelets.forEach(cubelet => {
-            cubelet.material.forEach(material => {
-                material.emissive.multiplyScalar(3);
-            });
-        });
-        
-        // Убираем эффект через 3 секунды
-        setTimeout(() => {
-            this.cubelets.forEach(cubelet => {
-                cubelet.material.forEach(material => {
-                    material.emissive.multiplyScalar(0.33);
-                });
-            });
-        }, 3000);
+        // Упрощенный эффект победы для производительности
+        this.updateGameStatus('🏆 ПОБЕДА! Кубик собран!');
     }
     
     // ================== СИСТЕМА ТАЙМЕРА ==================
@@ -708,7 +673,7 @@ class ProCubeGame {
     
     getTimeBonus() {
         if (!this.startTime) return 0;
-        const elapsed = Date.now() - this.startTime;
+            const elapsed = Date.now() - this.startTime;
         const minutes = elapsed / 60000;
         return Math.max(0, Math.floor(100 - minutes * 10)); // Бонус за скорость
     }
@@ -718,9 +683,14 @@ class ProCubeGame {
     }
     
     updateProgress() {
-        // Простая система прогресса на основе того, сколько граней собрано
-        const progressPercentage = this.calculateSolveProgress();
-        document.getElementById('progressFill').style.width = `${progressPercentage}%`;
+        // Дебаунсинг для производительности
+        if (this.progressUpdateTimeout) return;
+        
+        this.progressUpdateTimeout = setTimeout(() => {
+            const progressPercentage = this.calculateSolveProgress();
+            document.getElementById('progressFill').style.width = `${progressPercentage}%`;
+            this.progressUpdateTimeout = null;
+        }, 100);
     }
     
     calculateSolveProgress() {
@@ -888,17 +858,27 @@ class ProCubeGame {
     }
     
     onWindowResize() {
-        const canvas = document.getElementById('gameCanvas');
-        const aspect = canvas.clientWidth / canvas.clientHeight;
-        this.camera.aspect = aspect;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            const canvas = document.getElementById('gameCanvas');
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            this.camera.aspect = aspect;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     }
     
-    // ================== АНИМАЦИЯ ==================
+    // ================== ОПТИМИЗИРОВАННАЯ АНИМАЦИЯ ==================
     animate() {
         requestAnimationFrame(() => this.animate());
+        
+        // Ограничиваем FPS для экономии ресурсов
+        const now = Date.now();
+        if (!this.lastRenderTime) this.lastRenderTime = now;
+        const elapsed = now - this.lastRenderTime;
+        
+        // Рендерим только если прошло достаточно времени (60 FPS макс)
+        if (elapsed > 16) {
         this.renderer.render(this.scene, this.camera);
+            this.lastRenderTime = now;
+        }
     }
 }
 
@@ -913,10 +893,10 @@ class ProCubeApp {
     }
     
     startLoading() {
-        // Симуляция загрузки
+        // Ускоренная загрузка
         setTimeout(() => {
             this.showGame();
-        }, 5000);
+        }, 2000);
     }
     
     showGame() {
