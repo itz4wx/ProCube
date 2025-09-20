@@ -1,0 +1,289 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    height: 100vh;
+    overflow: hidden;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Экран загрузки */
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: gradientShift 3s ease-in-out infinite alternate;
+}
+
+@keyframes gradientShift {
+    0% { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+    100% { background: linear-gradient(135deg, #2a5298 0%, #667eea 100%); }
+}
+
+.loading-container {
+    text-align: center;
+    color: white;
+}
+
+.logo-3d {
+    font-size: 4rem;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-shadow: 
+        0 1px 0 #2a5298,
+        0 2px 0 #2a5298,
+        0 3px 0 #2a5298,
+        0 4px 0 #2a5298,
+        0 5px 0 #2a5298,
+        0 6px 0 #2a5298,
+        0 7px 10px rgba(0,0,0,0.3);
+    animation: logoFloat 2s ease-in-out infinite alternate;
+    background: linear-gradient(45deg, #4fc3f7, #29b6f6, #0288d1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+@keyframes logoFloat {
+    0% { transform: translateY(0px); }
+    100% { transform: translateY(-10px); }
+}
+
+.loading-cube {
+    perspective: 1000px;
+    margin: 2rem auto;
+    width: 100px;
+    height: 100px;
+}
+
+.cube {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    transform-style: preserve-3d;
+    animation: rotateCube 2s infinite linear;
+}
+
+@keyframes rotateCube {
+    0% { transform: rotateX(0deg) rotateY(0deg); }
+    100% { transform: rotateX(360deg) rotateY(360deg); }
+}
+
+.face {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border: 2px solid #fff;
+    opacity: 0.8;
+}
+
+.front { background: #ff6b6b; transform: rotateY(0deg) translateZ(50px); }
+.back { background: #4ecdc4; transform: rotateY(180deg) translateZ(50px); }
+.right { background: #45b7d1; transform: rotateY(90deg) translateZ(50px); }
+.left { background: #f39c12; transform: rotateY(-90deg) translateZ(50px); }
+.top { background: #6c5ce7; transform: rotateX(90deg) translateZ(50px); }
+.bottom { background: #a29bfe; transform: rotateX(-90deg) translateZ(50px); }
+
+.loading-text {
+    font-size: 1.5rem;
+    margin: 2rem 0 1rem 0;
+    animation: pulse 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+.loading-bar {
+    width: 200px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+.loading-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+    border-radius: 3px;
+    animation: loadingProgress 3s ease-in-out infinite;
+}
+
+@keyframes loadingProgress {
+    0% { width: 0%; }
+    50% { width: 70%; }
+    100% { width: 100%; }
+}
+
+/* Игровой экран */
+#game-screen {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    color: white;
+}
+
+.game-header h2 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.timer {
+    font-size: 1.2rem;
+    font-weight: bold;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    min-width: 80px;
+    text-align: center;
+}
+
+#game-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+#gameCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+}
+
+.game-controls {
+    display: flex;
+    justify-content: space-around;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.control-btn {
+    background: linear-gradient(45deg, #4fc3f7, #29b6f6);
+    border: none;
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    min-width: 80px;
+}
+
+.control-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+.control-btn:active {
+    transform: translateY(0px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.game-info {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    color: white;
+    text-align: center;
+}
+
+.moves-counter {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.help-text {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    font-style: italic;
+}
+
+/* Адаптивность для очень маленьких экранов */
+@media (max-height: 600px) {
+    .logo-3d {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .loading-cube {
+        width: 80px;
+        height: 80px;
+        margin: 1rem auto;
+    }
+    
+    .cube, .face {
+        width: 80px;
+        height: 80px;
+    }
+    
+    .game-header h2 {
+        font-size: 1.3rem;
+    }
+    
+    .control-btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.8rem;
+        min-width: 70px;
+    }
+}
+
+@media (max-width: 320px) {
+    .logo-3d {
+        font-size: 2.5rem;
+    }
+    
+    .control-btn {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.7rem;
+        min-width: 60px;
+    }
+}
+
+/* Убираем выделение текста и контекстное меню */
+* {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Предотвращаем зум при двойном тапе */
+* {
+    touch-action: manipulation;
+}
