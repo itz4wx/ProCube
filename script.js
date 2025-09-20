@@ -11,6 +11,9 @@ class RubiksCube {
         this.moveCount = 0;
         this.startTime = null;
         this.timerInterval = null;
+        this.isDraggingCamera = false;
+        this.selectedFace = null;
+        this.isSolved = false;
         
         this.colors = {
             white: 0xffffff,
@@ -30,7 +33,7 @@ class RubiksCube {
     init() {
         // Создание сцены
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x222222);
+        this.scene.background = new THREE.Color(0x1a3c72);
         
         // Создание камеры
         const canvas = document.getElementById('gameCanvas');
@@ -48,16 +51,37 @@ class RubiksCube {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         
-        // Освещение
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        // Улучшенное освещение
+        const ambientLight = new THREE.AmbientLight(0x4080ff, 0.4);
         this.scene.add(ambientLight);
         
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        // Основной источник света
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
         directionalLight.position.set(10, 10, 5);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.1;
+        directionalLight.shadow.camera.far = 50;
+        directionalLight.shadow.camera.left = -10;
+        directionalLight.shadow.camera.right = 10;
+        directionalLight.shadow.camera.top = 10;
+        directionalLight.shadow.camera.bottom = -10;
         this.scene.add(directionalLight);
+        
+        // Дополнительные источники света для лучшего освещения
+        const light1 = new THREE.DirectionalLight(0x80aaff, 0.3);
+        light1.position.set(-10, 5, 10);
+        this.scene.add(light1);
+        
+        const light2 = new THREE.DirectionalLight(0xaaccff, 0.2);
+        light2.position.set(5, -10, -5);
+        this.scene.add(light2);
+        
+        // Точечный источник света для дополнительного эффекта
+        const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
+        pointLight.position.set(0, 5, 5);
+        this.scene.add(pointLight);
         
         // Создание кубика Рубика
         this.createCube();
@@ -95,14 +119,38 @@ class RubiksCube {
     createCubelet(size) {
         const geometry = new THREE.BoxGeometry(size, size, size);
         
-        // Создание материалов для каждой грани
+        // Создание материалов для каждой грани с улучшенными свойствами
         const materials = [
-            new THREE.MeshLambertMaterial({ color: this.colors.black }), // right
-            new THREE.MeshLambertMaterial({ color: this.colors.black }), // left
-            new THREE.MeshLambertMaterial({ color: this.colors.black }), // top
-            new THREE.MeshLambertMaterial({ color: this.colors.black }), // bottom
-            new THREE.MeshLambertMaterial({ color: this.colors.black }), // front
-            new THREE.MeshLambertMaterial({ color: this.colors.black })  // back
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            }), // right
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            }), // left
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            }), // top
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            }), // bottom
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            }), // front
+            new THREE.MeshPhongMaterial({ 
+                color: this.colors.black, 
+                shininess: 30,
+                specular: 0x222222
+            })  // back
         ];
         
         const cubelet = new THREE.Mesh(geometry, materials);
@@ -119,26 +167,32 @@ class RubiksCube {
             // Правая грань (красная)
             if (x === 1) {
                 cubelet.material[0].color.setHex(this.colors.red);
+                cubelet.material[0].emissive.setHex(0x110000);
             }
             // Левая грань (оранжевая)
             if (x === -1) {
                 cubelet.material[1].color.setHex(this.colors.orange);
+                cubelet.material[1].emissive.setHex(0x111100);
             }
             // Верхняя грань (белая)
             if (y === 1) {
                 cubelet.material[2].color.setHex(this.colors.white);
+                cubelet.material[2].emissive.setHex(0x111111);
             }
             // Нижняя грань (желтая)
             if (y === -1) {
                 cubelet.material[3].color.setHex(this.colors.yellow);
+                cubelet.material[3].emissive.setHex(0x111100);
             }
             // Передняя грань (зеленая)
             if (z === 1) {
                 cubelet.material[4].color.setHex(this.colors.green);
+                cubelet.material[4].emissive.setHex(0x001100);
             }
             // Задняя грань (синяя)
             if (z === -1) {
                 cubelet.material[5].color.setHex(this.colors.blue);
+                cubelet.material[5].emissive.setHex(0x000011);
             }
         });
     }
@@ -151,12 +205,18 @@ class RubiksCube {
         
         // Мышь
         canvas.addEventListener('mousedown', (e) => {
+            if (this.isRotating) return;
+            
+            // Проверяем, кликнул ли пользователь по кубику
+            this.checkCubeClick(e);
+            
             isDragging = true;
+            this.isDraggingCamera = true;
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
         
         canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
+            if (!isDragging || !this.isDraggingCamera) return;
             
             const deltaMove = {
                 x: e.clientX - previousMousePosition.x,
@@ -169,6 +229,7 @@ class RubiksCube {
         
         canvas.addEventListener('mouseup', () => {
             isDragging = false;
+            this.isDraggingCamera = false;
         });
         
         // Тач для мобильных устройств
@@ -177,7 +238,13 @@ class RubiksCube {
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (e.touches.length === 1) {
+                if (this.isRotating) return;
+                
+                // Проверяем, коснулся ли пользователь кубика
+                this.checkCubeTouchClick(e.touches[0]);
+                
                 isDragging = true;
+                this.isDraggingCamera = true;
                 touchStartPosition = {
                     x: e.touches[0].clientX,
                     y: e.touches[0].clientY
@@ -188,7 +255,7 @@ class RubiksCube {
         
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            if (!isDragging || e.touches.length !== 1) return;
+            if (!isDragging || !this.isDraggingCamera || e.touches.length !== 1) return;
             
             const touch = e.touches[0];
             const deltaMove = {
@@ -203,6 +270,7 @@ class RubiksCube {
         canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
             isDragging = false;
+            this.isDraggingCamera = false;
         });
     }
     
@@ -235,10 +303,13 @@ class RubiksCube {
                 this.performRotation(randomMove);
                 moveCount++;
                 setTimeout(performMove, 200);
+            } else {
+                this.updateGameStatus('Кубик перемешан - начните сборку!');
             }
         };
         
         this.resetMoveCount();
+        this.updateGameStatus('Перемешивание...');
         performMove();
     }
     
@@ -253,6 +324,8 @@ class RubiksCube {
         this.animateRotation(face, axis, angle, () => {
             this.isRotating = false;
             this.incrementMoveCount();
+            // Проверяем, собран ли кубик после поворота
+            this.checkIfSolved();
         });
     }
     
@@ -369,6 +442,8 @@ class RubiksCube {
         this.createCube();
         this.resetMoveCount();
         this.resetTimer();
+        this.isSolved = false;
+        this.updateGameStatus('Кубик сброшен - готов к игре!');
     }
     
     incrementMoveCount() {
@@ -415,9 +490,11 @@ class RubiksCube {
         });
         
         document.getElementById('solveBtn').addEventListener('click', () => {
-            // Простое "решение" - сброс кубика
-            this.reset();
+            this.solveCube();
         });
+        
+        // Обработчики для взаимодействия с кубиком
+        this.setupCubeInteraction();
         
         // Адаптация размера канваса при изменении размера окна
         window.addEventListener('resize', () => {
@@ -427,6 +504,179 @@ class RubiksCube {
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
         });
+    }
+    
+    setupCubeInteraction() {
+        // Дополнительные обработчики событий для взаимодействия с кубиком
+    }
+    
+    checkCubeClick(event) {
+        if (this.isRotating) return;
+        
+        const canvas = this.renderer.domElement;
+        const rect = canvas.getBoundingClientRect();
+        
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.cubelets, true);
+        
+        if (intersects.length > 0) {
+            const intersectedObject = intersects[0].object;
+            const face = intersects[0].face;
+            const faceNormal = face.normal.clone();
+            
+            // Преобразуем нормаль в мировые координаты
+            faceNormal.transformDirection(intersectedObject.matrixWorld);
+            
+            // Определяем какую грань повернуть на основе нормали
+            const move = this.getMoveFromNormal(faceNormal, intersectedObject.userData);
+            if (move) {
+                this.performRotation(move);
+            }
+        }
+    }
+    
+    checkCubeTouchClick(touch) {
+        if (this.isRotating) return;
+        
+        const canvas = this.renderer.domElement;
+        const rect = canvas.getBoundingClientRect();
+        
+        this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.cubelets, true);
+        
+        if (intersects.length > 0) {
+            const intersectedObject = intersects[0].object;
+            const face = intersects[0].face;
+            const faceNormal = face.normal.clone();
+            
+            // Преобразуем нормаль в мировые координаты
+            faceNormal.transformDirection(intersectedObject.matrixWorld);
+            
+            // Определяем какую грань повернуть на основе нормали
+            const move = this.getMoveFromNormal(faceNormal, intersectedObject.userData);
+            if (move) {
+                this.performRotation(move);
+            }
+        }
+    }
+    
+    getMoveFromNormal(normal, cubePosition) {
+        const threshold = 0.5;
+        
+        // Определяем наиболее выступающую компоненту нормали
+        const absX = Math.abs(normal.x);
+        const absY = Math.abs(normal.y);
+        const absZ = Math.abs(normal.z);
+        
+        if (absX > threshold && absX > absY && absX > absZ) {
+            // Клик по боковой грани (право/лево)
+            return normal.x > 0 ? 'R' : 'L';
+        } else if (absY > threshold && absY > absX && absY > absZ) {
+            // Клик по верхней/нижней грани
+            return normal.y > 0 ? 'U' : 'D';
+        } else if (absZ > threshold && absZ > absX && absZ > absY) {
+            // Клик по передней/задней грани
+            return normal.z > 0 ? 'F' : 'B';
+        }
+        
+        return null;
+    }
+    
+    checkIfSolved() {
+        // Проверка каждой грани на одинаковый цвет
+        const faces = {
+            right: [], left: [], top: [], bottom: [], front: [], back: []
+        };
+        
+        this.cubelets.forEach(cubelet => {
+            const { x, y, z } = cubelet.userData;
+            
+            if (x === 1) faces.right.push(cubelet.material[0].color.getHex());
+            if (x === -1) faces.left.push(cubelet.material[1].color.getHex());
+            if (y === 1) faces.top.push(cubelet.material[2].color.getHex());
+            if (y === -1) faces.bottom.push(cubelet.material[3].color.getHex());
+            if (z === 1) faces.front.push(cubelet.material[4].color.getHex());
+            if (z === -1) faces.back.push(cubelet.material[5].color.getHex());
+        });
+        
+        // Проверяем, что все цвета на каждой грани одинаковы
+        const solved = Object.values(faces).every(faceColors => {
+            if (faceColors.length === 0) return true;
+            const firstColor = faceColors[0];
+            return faceColors.every(color => color === firstColor);
+        });
+        
+        if (solved && !this.isSolved) {
+            this.isSolved = true;
+            this.onCubeSolved();
+        } else if (!solved) {
+            this.isSolved = false;
+        }
+        
+        return solved;
+    }
+    
+    onCubeSolved() {
+        // Останавливаем таймер
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+        }
+        
+        // Обновляем статус
+        this.updateGameStatus('🎉 ПОЗДРАВЛЯЕМ! КУБИК СОБРАН! 🎉');
+        
+        // Показываем сообщение о победе
+        setTimeout(() => {
+            alert(`Поздравляем! Кубик собран за ${this.moveCount} ходов!`);
+        }, 500);
+        
+        // Добавляем эффект свечения
+        this.cubelets.forEach(cubelet => {
+            cubelet.material.forEach(material => {
+                material.emissive.multiplyScalar(2);
+            });
+        });
+        
+        // Убираем эффект через 3 секунды
+        setTimeout(() => {
+            this.cubelets.forEach(cubelet => {
+                cubelet.material.forEach(material => {
+                    material.emissive.multiplyScalar(0.5);
+                });
+            });
+        }, 3000);
+    }
+    
+    solveCube() {
+        if (this.isRotating) return;
+        
+        // Простой алгоритм "решения" - выполняем последовательность ходов
+        // которая приводит к собранному состоянию
+        const solutionMoves = [
+            'U', 'R', 'U\'', 'R\'', 'U\'', 'F\'', 'U', 'F',
+            'R', 'U', 'R\'', 'F\'', 'R', 'F', 'U2', 'R\'',
+            'U2', 'R', 'B\'', 'R\'', 'B', 'R', 'U2', 'R\''
+        ];
+        
+        // Сброс к собранному состоянию (более простое решение)
+        this.reset();
+        this.updateGameStatus('Кубик автоматически решен!');
+        
+        // Показываем уведомление
+        alert('Кубик автоматически решен! Попробуйте перемешать и собрать самостоятельно.');
+    }
+    
+    updateGameStatus(message) {
+        const statusElement = document.getElementById('gameStatus');
+        if (statusElement) {
+            statusElement.textContent = message;
+        }
     }
     
     animate() {

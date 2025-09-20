@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #0066cc 100%);
     height: 100vh;
     overflow: hidden;
     touch-action: manipulation;
@@ -22,7 +22,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    background: linear-gradient(135deg, #001122 0%, #1e3c72 50%, #2a5298 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -31,8 +31,8 @@ body {
 }
 
 @keyframes gradientShift {
-    0% { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
-    100% { background: linear-gradient(135deg, #2a5298 0%, #667eea 100%); }
+    0% { background: linear-gradient(135deg, #001122 0%, #1e3c72 50%, #2a5298 100%); }
+    100% { background: linear-gradient(135deg, #2a5298 0%, #0066cc 50%, #001133 100%); }
 }
 
 .loading-container {
@@ -45,15 +45,15 @@ body {
     font-weight: bold;
     margin-bottom: 2rem;
     text-shadow: 
-        0 1px 0 #2a5298,
-        0 2px 0 #2a5298,
-        0 3px 0 #2a5298,
-        0 4px 0 #2a5298,
-        0 5px 0 #2a5298,
-        0 6px 0 #2a5298,
-        0 7px 10px rgba(0,0,0,0.3);
+        0 1px 0 #0066cc,
+        0 2px 0 #0066cc,
+        0 3px 0 #0066cc,
+        0 4px 0 #0066cc,
+        0 5px 0 #0066cc,
+        0 6px 0 #0066cc,
+        0 7px 10px rgba(0,0,0,0.4);
     animation: logoFloat 2s ease-in-out infinite alternate;
-    background: linear-gradient(45deg, #4fc3f7, #29b6f6, #0288d1);
+    background: linear-gradient(45deg, #00aaff, #0066cc, #004499);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -92,12 +92,12 @@ body {
     opacity: 0.8;
 }
 
-.front { background: #ff6b6b; transform: rotateY(0deg) translateZ(50px); }
-.back { background: #4ecdc4; transform: rotateY(180deg) translateZ(50px); }
-.right { background: #45b7d1; transform: rotateY(90deg) translateZ(50px); }
-.left { background: #f39c12; transform: rotateY(-90deg) translateZ(50px); }
-.top { background: #6c5ce7; transform: rotateX(90deg) translateZ(50px); }
-.bottom { background: #a29bfe; transform: rotateX(-90deg) translateZ(50px); }
+.front { background: #0066cc; transform: rotateY(0deg) translateZ(50px); }
+.back { background: #004499; transform: rotateY(180deg) translateZ(50px); }
+.right { background: #0088ff; transform: rotateY(90deg) translateZ(50px); }
+.left { background: #003366; transform: rotateY(-90deg) translateZ(50px); }
+.top { background: #00aaff; transform: rotateX(90deg) translateZ(50px); }
+.bottom { background: #002244; transform: rotateX(-90deg) translateZ(50px); }
 
 .loading-text {
     font-size: 1.5rem;
@@ -121,7 +121,7 @@ body {
 
 .loading-progress {
     height: 100%;
-    background: linear-gradient(90deg, #4fc3f7, #29b6f6);
+    background: linear-gradient(90deg, #00aaff, #0066cc);
     border-radius: 3px;
     animation: loadingProgress 3s ease-in-out infinite;
 }
@@ -137,7 +137,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #0066cc 100%);
 }
 
 .game-header {
@@ -188,7 +188,7 @@ body {
 }
 
 .control-btn {
-    background: linear-gradient(45deg, #4fc3f7, #29b6f6);
+    background: linear-gradient(45deg, #0066cc, #004499);
     border: none;
     color: white;
     padding: 0.8rem 1.5rem;
@@ -197,7 +197,7 @@ body {
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     min-width: 80px;
 }
 
@@ -229,6 +229,20 @@ body {
     font-size: 0.9rem;
     opacity: 0.8;
     font-style: italic;
+    margin-bottom: 0.5rem;
+}
+
+.game-status {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #00aaff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    animation: statusPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes statusPulse {
+    0% { opacity: 0.8; }
+    100% { opacity: 1; }
 }
 
 /* Адаптивность для очень маленьких экранов */
